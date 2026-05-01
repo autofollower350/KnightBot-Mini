@@ -5,10 +5,10 @@ async function downloadJNVU(formNumber) {
     const pdfPath = `./admit_card_${formNumber}.pdf`;
     
     // Browser launch karein
-    const browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-    });
+    const browser = await puppeteer.launch({ 
+    headless: "new", // लेटेस्ट वर्जन के लिए 'new' लिखें
+    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] 
+});
 
     try {
         const page = await browser.newPage();
