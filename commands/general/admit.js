@@ -34,14 +34,19 @@ module.exports = {
             
             const submitBtn = page.locator("#btnGetResult");
 
-            // 2. Download PDF logic
+                        // 2. Download PDF logic
+            console.log(`Attempting download for Form: ${formNo}...`);
+            
             const [download] = await Promise.all([
-                page.waitForEvent('download', { timeout: 30000 }),
-                submitBtn.click()
+                // Timeout को 60 सेकंड कर दिया है क्योंकि JNVU स्लो है
+                page.waitForEvent('download', { timeout: 60000 }),
+                // डबल क्लिक लॉजिक - JNVU के लिए यह जरूरी है
+                submitBtn.click().then(() => submitBtn.click())
             ]);
 
             await download.saveAs(pdfPath);
             await browser.close();
+
 
             // 3. Extract Info from PDF
             const dataBuffer = fs.readFileSync(pdfPath);
