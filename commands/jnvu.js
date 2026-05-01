@@ -1,35 +1,71 @@
-const { exec } = require('child_process');
+const puppeteer = require('puppeteer');
 const fs = require('fs');
 
-module.exports = {
-    name: 'admit',
-    alias: ['jnvu', 'card'],
-    category: 'education',
-    desc: 'Download JNVU Admit Card',
-    async run({ sock, m, args }) {
-        const formNo = args[0];
-        if (!formNo) return m.reply('❌ Bhai, Form Number toh likho!\nExample: `.admit 12345`');
+async function downloadJNVU(formNumber) {
+    const pdfPath = `./admit_card_${formNumber}.pdf`;
+    
+    // Browser launch karein
+    const browser = await puppeteer.launch({
+        headless: true,
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
 
-        await m.reply('⏳ *Knight Bot* aapka admit card fetch kar raha hai... thoda intezar karein.');
+    try {
+        const page = await browser.newPage();
+        const url = "https://erp.jnvuiums.in/(S(biolzjtwlrcfmzwwzgs5uj5n))/Exam/Pre_Exam/Exam_ForALL_AdmitCard.aspx#";
 
-        // Python command run karna
-        exec(`python3 jnvu.py ${formNo}`, async (err, stdout, stderr) => {
-            const pdfPath = `./admit_card_${formNo}.pdf`; 
-
-            if (fs.existsSync(pdfPath)) {
-                await sock.sendMessage(m.chat, { 
-                    document: { url: pdfPath }, 
-                    mimetype: 'application/pdf', 
-                    fileName: `JNVU_Admit_${formNo}.pdf`,
-                    caption: `✅ *JNVU Admit Card*\n📝 Form No: ${formNo}\n🤖 Powered by Knight Bot`
-                }, { quoted: m });
-
-                // File delete karna
-                setTimeout(() => { fs.unlinkSync(pdfPath); }, 5000);
+        // Speed ke liye images aur CSS block karein
+        await page.setRequestInterception(true);
+        page.on('request', (req) => {
+            if (['image', 'stylesheet', 'font'].includes(req.resourceType())) {
+                req.abort();
             } else {
-                await m.reply('❌ *Error:* Admit card nahi mila. Ya toh form number galat hai ya JNVU server down hai.');
-                console.error(stderr);
+                req.continue();
             }
         });
+
+        await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+
+        // Form number bharein
+        await page.type('#txtchallanNo', formNumber.toString());
+
+        // Download handle karne ka jugaad
+        const client = await page.target().createCDPSession();
+        await client.send('Page.setDownloadBehavior', {
+            behavior: 'allow',
+            downloadPath: './',
+        });
+
+        // Submit button click karein
+        await page.click('#btnGetResult');
+
+        // Wait karein jab tak file download na ho jaye (5-10 seconds)
+        console.log("Downloading...");
+        await new Promise(resolve => setTimeout(resolve, 8000)); 
+
+        await browser.close();
+        
+        if (fs.existsSync(pdfPath)) {
+            return pdfPath;
+        } else {
+            return null;
+        }
+
+    } catch (error) {
+        console.error("Error:", error);
+        await browser.close();
+        return null;
     }
-};
+}
+
+// Bot Command Example (WhatsApp Bot Logic):
+// if (command === 'jnvu') {
+//    const formNo = args[0];
+//    const path = await downloadJNVU(formNo);
+//    if (path) {
+//        await conn.sendMessage(id, { document: { url: path }, fileName: 'AdmitCard.pdf' });
+//        fs.unlinkSync(path); // File delete kar dein
+//    } else {
+//        reply("Error: Admit card nahi mila!");
+//    }
+// }
