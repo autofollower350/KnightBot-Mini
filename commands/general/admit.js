@@ -6,16 +6,23 @@ module.exports = {
     name: 'admit',
     alias: ['jnvu'],
     category: 'general',
-    async execute(m, { conn, client, sock, text }) {
-        // यह लाइन चेक करेगी कि मैसेज भेजने वाला फंक्शन कौन सा उपलब्ध है
-        const bot = conn || client || sock || m.client;
-        
+    async execute(m, args_obj) {
+        // --- Universal Socket Finder ---
+        // यह लाइन आपके बॉट के अंदर छिपे हुए 'sendMessage' फंक्शन को जबरदस्ती ढूंढ लेगी
+        const bot = args_obj.conn || args_obj.client || args_obj.sock || args_obj.Knight || m.client || m.conn;
+
+        if (!bot || typeof bot.sendMessage !== 'function') {
+            console.log("CRITICAL: Could not find sendMessage function in any object!");
+            return; 
+        }
+
         const sendReply = async (txt) => {
             return await bot.sendMessage(m.chat, { text: txt }, { quoted: m });
         };
 
         try {
-            const formNumber = text ? text.trim() : null;
+            // KnightBot-Mini में अक्सर 'text' args_obj के अंदर होता है
+            const formNumber = args_obj.text || (args_obj.args && args_obj.args[0]) || null;
 
             if (!formNumber) {
                 return await sendReply("❌ कृपया फॉर्म नंबर दें।\nउदाहरण: `.admit 12880707` ");
@@ -26,7 +33,7 @@ module.exports = {
             const postData = qs.stringify({
                 '__EVENTTARGET': '',
                 '__EVENTARGUMENT': '',
-                'txtchallanNo': formNumber,
+                'txtchallanNo': formNumber.trim(),
                 'btnGetResult': 'Download'
             });
 
@@ -60,8 +67,7 @@ module.exports = {
 
         } catch (err) {
             console.error("Admit Command Error:", err.message);
-            await sendReply("❌ सर्वर एरर आया है। कृपया फिर से कोशिश करें।");
+            // यहाँ बिना Reply के सिर्फ Log कर रहे हैं ताकि बॉट क्रैश न हो
         }
     }
 };
-
