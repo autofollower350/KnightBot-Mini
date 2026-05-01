@@ -1,71 +1,37 @@
-const puppeteer = require('puppeteer');
+const axios = require('axios');
 const fs = require('fs');
 
 async function downloadJNVU(formNumber) {
     const pdfPath = `./admit_card_${formNumber}.pdf`;
-    
-    // Browser launch karein
-    const browser = await puppeteer.launch({ 
-    headless: "new", // लेटेस्ट वर्जन के लिए 'new' लिखें
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] 
-});
+    const url = "https://erp.jnvuiums.in/(S(biolzjtwlrcfmzwwzgs5uj5n))/Exam/Pre_Exam/Exam_ForALL_AdmitCard.aspx";
 
     try {
-        const page = await browser.newPage();
-        const url = "https://erp.jnvuiums.in/(S(biolzjtwlrcfmzwwzgs5uj5n))/Exam/Pre_Exam/Exam_ForALL_AdmitCard.aspx#";
-
-        // Speed ke liye images aur CSS block karein
-        await page.setRequestInterception(true);
-        page.on('request', (req) => {
-            if (['image', 'stylesheet', 'font'].includes(req.resourceType())) {
-                req.abort();
-            } else {
-                req.continue();
+        // 1. बिना ब्राउज़र के सीधे रिक्वेस्ट भेजें
+        const response = await axios({
+            method: 'get',
+            url: url,
+            responseType: 'stream', // क्योंकि हमें PDF फाइल चाहिए
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                'Referer': 'https://erp.jnvuiums.in/'
+            },
+            params: {
+                'txtchallanNo': formNumber,
+                'btnGetResult': 'Download' // यह JNVU के बटन का नाम है
             }
         });
 
-        await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+        // 2. फाइल को सेव करें
+        const writer = fs.createWriteStream(pdfPath);
+        response.data.pipe(writer);
 
-        // Form number bharein
-        await page.type('#txtchallanNo', formNumber.toString());
-
-        // Download handle karne ka jugaad
-        const client = await page.target().createCDPSession();
-        await client.send('Page.setDownloadBehavior', {
-            behavior: 'allow',
-            downloadPath: './',
+        return new Promise((resolve, reject) => {
+            writer.on('finish', () => resolve(pdfPath));
+            writer.on('error', reject);
         });
 
-        // Submit button click karein
-        await page.click('#btnGetResult');
-
-        // Wait karein jab tak file download na ho jaye (5-10 seconds)
-        console.log("Downloading...");
-        await new Promise(resolve => setTimeout(resolve, 8000)); 
-
-        await browser.close();
-        
-        if (fs.existsSync(pdfPath)) {
-            return pdfPath;
-        } else {
-            return null;
-        }
-
     } catch (error) {
-        console.error("Error:", error);
-        await browser.close();
+        console.error("Scraping Error:", error.message);
         return null;
     }
 }
-
-// Bot Command Example (WhatsApp Bot Logic):
-// if (command === 'jnvu') {
-//    const formNo = args[0];
-//    const path = await downloadJNVU(formNo);
-//    if (path) {
-//        await conn.sendMessage(id, { document: { url: path }, fileName: 'AdmitCard.pdf' });
-//        fs.unlinkSync(path); // File delete kar dein
-//    } else {
-//        reply("Error: Admit card nahi mila!");
-//    }
-// }
