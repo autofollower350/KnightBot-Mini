@@ -19,9 +19,19 @@ module.exports = {
 
         // ब्राउज़र लॉन्च (Playwright)
         const browser = await chromium.launch({ 
-            headless: true,
-            args: ['--no-sandbox', '--disable-setuid-sandbox'] // Linux/VPS के लिए ज़रूरी
-        });
+    headless: true,
+    args: [
+        '--no-sandbox', 
+        '--disable-setuid-sandbox', 
+        '--disable-dev-shm-usage', // यह सबसे ज़रूरी है (मेमोरी क्रैश रोकता है)
+        '--disable-accelerated-2d-canvas',
+        '--no-first-run',
+        '--no-zygote',
+        '--single-process', // रिसोर्स कम लेता है
+        '--disable-gpu'
+    ]
+});
+
 
         try {
             const context = await browser.newContext({ acceptDownloads: true });
