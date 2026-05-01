@@ -1,87 +1,55 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
-const pdf = require('pdf-parse');
 
 module.exports = {
     name: 'admit',
-    aliases: ['jnvu', 'search'],
+    aliases: ['jnvu'],
     category: 'general',
-    description: 'Download and Extract JNVU Admit Card Info',
+    description: 'Download JNVU Admit Card PDF',
     usage: '.admit [form_number]',
 
     async execute(sock, msg, args, extra) {
         const formNo = args[0];
-        if (!formNo) return await extra.reply("❌ कृपया फॉर्म नंबर लिखें।");
+        if (!formNo) return await extra.reply("❌ भाई, फॉर्म नंबर तो लिखो!");
 
-        await extra.reply(`🔍 Form ${formNo} के लिए ब्राउज़र स्टार्ट कर रहा हूँ... (इसमें समय लग सकता है)`);
+        await extra.reply("⏳ एडमिट कार्ड डाउनलोड कर रहा हूँ...");
 
         const pdfPath = `./admit_card_${formNo}.pdf`;
         let browser;
 
         try {
-            // 1. Browser Launch (Heavily resource intensive)
             browser = await chromium.launch({ 
                 headless: true,
                 args: ['--no-sandbox', '--disable-setuid-sandbox'] 
             });
             const context = await browser.newContext({ acceptDownloads: true });
             const page = await context.newPage();
-
-            const url = "https://erp.jnvuiums.in/(S(biolzjtwlrcfmzwwzgs5uj5n))/Exam/Pre_Exam/Exam_ForALL_AdmitCard.aspx";
+            const url = "https://erp.jnvuiums.in/Exam/Pre_Exam/Exam_ForALL_AdmitCard.aspx";
 
             await page.goto(url, { waitUntil: 'networkidle', timeout: 60000 });
             await page.fill("#txtchallanNo", formNo);
             
             const submitBtn = page.locator("#btnGetResult");
-
-                        // 2. Download PDF logic
-            console.log(`Attempting download for Form: ${formNo}...`);
-            
             const [download] = await Promise.all([
-                // Timeout को 60 सेकंड कर दिया है क्योंकि JNVU स्लो है
-                page.waitForEvent('download', { timeout: 60000 }),
-                // डबल क्लिक लॉजिक - JNVU के लिए यह जरूरी है
+                page.waitForEvent('download', { timeout: 40000 }),
                 submitBtn.click().then(() => submitBtn.click())
             ]);
 
             await download.saveAs(pdfPath);
             await browser.close();
 
-
-            // 3. Extract Info from PDF
-            const dataBuffer = fs.readFileSync(pdfPath);
-            const pdfData = await pdf(dataBuffer);
-            const text = pdfData.text;
-
-            let info = { 
-                name: text.match(/NAME OF CANDIDATE\s*:\s*(.*)/)?.[1]?.split('\n')[0]?.trim() || "Not Found",
-                father: text.match(/FATHER'S NAME\s*:\s*(.*)/)?.[1]?.split('\n')[0]?.trim() || "Not Found",
-                roll: text.match(/Roll no is\s+([\w\d]+)/)?.[1]?.trim() || "Not Found",
-                center: text.match(/Exam Centre is\s*([\s\S]*?)(?=Print Date|To,|The Centre|NAME OF EXAMINATION)/)?.[1]?.replace(/\s+/g, ' ')?.trim() || "Not Found"
-            };
-
-            // 4. Send Info & File to WhatsApp
-            const caption = `✅ *JNVU ADMIT CARD FOUND*\n\n` +
-                          `👤 *Name:* ${info.name}\n` +
-                          `👨‍👦 *Father:* ${info.father}\n` +
-                          `🔢 *Roll No:* ${info.roll}\n` +
-                          `📍 *Center:* ${info.center}\n\n` +
-                          `_Bot is sending your PDF file below..._`;
-
             await sock.sendMessage(extra.from, { 
                 document: fs.readFileSync(pdfPath), 
                 mimetype: 'application/pdf', 
                 fileName: `JNVU_${formNo}.pdf`,
-                caption: caption
+                caption: `✅ *JNVU Admit Card*`
             }, { quoted: msg });
 
-            // 5. Cleanup
             if (fs.existsSync(pdfPath)) fs.unlinkSync(pdfPath);
 
         } catch (error) {
-            console.error(error);
             if (browser) await browser.close();
-            await extra.reply("❌ Error: एडमिट कार्ड नहीं मिला या वेबसाइट ने रिस्पॉन्स नहीं दिया।");
+            await extra.reply("❌ एरर: एडमिट कार्ड नहीं मिला।");
         }
     }
 };
